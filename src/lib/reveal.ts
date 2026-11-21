@@ -5,7 +5,12 @@ import { columnOf, type DrawEvent, type Letter, type Rank, type Rng } from "./lo
 export const RANK_ORDER: Rank[] = ["white", "blue", "green", "red", "gold", "rainbow"];
 
 export type Tens = number | null; // null = 1桁（十の位が空白）
-export type Hesitation = "none" | "hesitate" | "respin";
+/** 止まりかけたリールがさらに何コマ滑るか */
+export interface Slips {
+  letter: number;
+  tens: number;
+  ones: number;
+}
 
 export interface RevealPlan {
   final: number;
@@ -15,7 +20,8 @@ export interface RevealPlan {
   tensCandidates: Tens[];
   onesCandidates: number[];
   slowSteps: number[]; // 一の位の減速で表示する番号列（最後が確定番号）
-  hesitation: Hesitation; // 止まりかけて1コマ進む / 一度止まって再始動
+  slips: Slips;
+  respin: boolean; // 一の位が一度止まってから再始動する
 }
 
 export interface EventPlan {
@@ -37,14 +43,30 @@ const SLOW_RANGE: Record<Rank, [number, number]> = {
   gold: [6, 8],
   rainbow: [7, 10],
 };
-const HESITATE_RATE: Record<Rank, number> = {
-  white: 0.05,
-  blue: 0.15,
-  green: 0.25,
-  red: 0.4,
-  gold: 0.5,
-  rainbow: 0.6,
+// 一の位の滑りコマ数の出やすさ [0, 1, 2, 3]
+const ONES_SLIP: Record<Rank, number[]> = {
+  white: [0.45, 0.35, 0.2, 0],
+  blue: [0.35, 0.4, 0.25, 0],
+  green: [0.25, 0.35, 0.3, 0.1],
+  red: [0.1, 0.3, 0.4, 0.2],
+  gold: [0.1, 0.25, 0.4, 0.25],
+  rainbow: [0.05, 0.25, 0.4, 0.3],
 };
+const TENS_SLIP: Record<Rank, number> = {
+  white: 0.2, blue: 0.25, green: 0.3, red: 0.4, gold: 0.45, rainbow: 0.5,
+};
+const RESPIN_RATE: Record<Rank, number> = {
+  white: 0, blue: 0.03, green: 0.08, red: 0.2, gold: 0.25, rainbow: 0.3,
+};
+
+function pickIndex(weights: number[], rng: Rng) {
+  let x = rng() * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < weights.length; i++) {
+    x -= weights[i];
+    if (x < 0) return i;
+  }
+  return weights.length - 1;
+}
 
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 const randInt = (rng: Rng, lo: number, hi: number) =>
@@ -77,10 +99,12 @@ export function buildRevealPlan(
     }
   }
 
-  let hesitation: Hesitation = "none";
-  if (slowSteps.length >= 2 && rng() < HESITATE_RATE[rank]) {
-    hesitation = rng() < 0.5 ? "hesitate" : "respin";
-  }
+  const slips: Slips = {
+    letter: rng() < 0.15 ? 1 : 0,
+    tens: rng() < TENS_SLIP[rank] ? 1 : 0,
+    ones: pickIndex(ONES_SLIP[rank], rng),
+  };
+  const respin = rng() < RESPIN_RATE[rank];
 
   return {
     final,
@@ -90,7 +114,8 @@ export function buildRevealPlan(
     tensCandidates: uniq(inColumn.map(tensOf)),
     onesCandidates,
     slowSteps,
-    hesitation,
+    slips,
+    respin,
   };
 }
 

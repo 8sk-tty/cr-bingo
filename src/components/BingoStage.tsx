@@ -204,10 +204,21 @@ export default function BingoStage() {
       },
       stop: (opts?: { minCells?: number; power?: number }, t = target) =>
         skipRef.current || !h ? (h?.jump(t), Promise.resolve()) : h.stopAt(t, opts),
-      step: (ms: number) =>
-        skipRef.current || !h ? (h?.jump(target), Promise.resolve()) : h.stepTo(target, ms),
+      step: (ms: number, t = target) =>
+        skipRef.current || !h ? (h?.jump(t), Promise.resolve()) : h.stepTo(t, ms),
       jump: () => h?.jump(target),
     };
+  };
+
+  // 止まりかけたリールを slips コマ手前で一旦止め、1コマずつ滑らせて target に着地させる
+  const stopWithSlips = async (C: ReturnType<typeof col>, opts: { minCells?: number; power?: number }, slips: number, pace: number) => {
+    const at = (back: number) => (C.target - back + C.len * 4) % C.len;
+    if (slips === 0) return C.stop(opts);
+    await C.stop(opts, at(slips));
+    for (let k = slips - 1; k >= 0; k--) {
+      await wait((100 + Math.random() * 150) * pace);
+      await C.step((260 + Math.random() * 80) * pace, at(k));
+    }
   };
 
   const runReel = async (i: number, plan: RevealPlan, rank: Rank, telopText: string | null) => {
@@ -220,12 +231,12 @@ export default function BingoStage() {
     O.spin();
     await wait(500 * pace);
     // 1. 列
-    await L.stop({ minCells: Math.round(5 * pace) });
+    await stopWithSlips(L, { minCells: Math.round(5 * pace) }, plan.slips.letter, pace);
     updateReel(i, { lock: 1 });
     play(sfx.sfxLock);
     await wait(250 * pace);
     // 2. 十の位
-    await T.stop({ minCells: Math.round(5 * pace) });
+    await stopWithSlips(T, { minCells: Math.round(5 * pace) }, plan.slips.tens, pace);
     updateReel(i, { lock: 2 });
     play(sfx.sfxLock);
     // カットイン
@@ -234,14 +245,10 @@ export default function BingoStage() {
       await showCutin(telopText, CUTIN_SUB[rank] ?? "", rank, CUTIN_LEVEL[rank] ?? 1);
     }
     await wait(300 * pace);
-    // 3. 一の位（減速 → 止まりかけ / 再始動）
+    // 3. 一の位（減速 → 再始動 → 滑り）
     const slow = { minCells: 3 + plan.slowSteps.length, power: POWER[rank] };
-    const before = (O.target - 1 + O.len) % O.len;
-    if (plan.hesitation === "hesitate") {
-      await O.stop(slow, before);
-      await wait(900 * pace);
-      await O.step(650);
-    } else if (plan.hesitation === "respin") {
+    if (plan.respin) {
+      const before = (O.target - 1 + O.len) % O.len;
       await O.stop(slow, before);
       updateReel(i, { fake: true });
       play(sfx.sfxLock);
@@ -250,9 +257,9 @@ export default function BingoStage() {
       play(sfx.sfxWhoosh);
       O.spin();
       await wait(400);
-      await O.stop({ minCells: 8, power: POWER[rank] });
+      await stopWithSlips(O, { minCells: 8, power: POWER[rank] }, Math.min(1, plan.slips.ones), pace);
     } else {
-      await O.stop(slow);
+      await stopWithSlips(O, slow, plan.slips.ones, pace);
     }
     O.jump();
     updateReel(i, { lock: 3, fake: false });

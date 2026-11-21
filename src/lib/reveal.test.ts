@@ -65,3 +65,36 @@ describe("buildHoldSteps", () => {
     }
   });
 });
+
+describe("滑り（スベリ）", () => {
+  test("一の位の滑りは0〜3コマ、列・十の位は0〜1コマ", () => {
+    const rng = seededRng(9);
+    for (const rank of ["white", "blue", "green", "red", "gold", "rainbow"] as const) {
+      for (let i = 0; i < 200; i++) {
+        const p = buildRevealPlan(55, rank, all, rng);
+        expect(p.slips.ones).toBeGreaterThanOrEqual(0);
+        expect(p.slips.ones).toBeLessThanOrEqual(3);
+        expect([0, 1]).toContain(p.slips.tens);
+        expect([0, 1]).toContain(p.slips.letter);
+      }
+    }
+  });
+
+  test("通常でも半分以上は一の位が滑り、熱いほど滑りが多い", () => {
+    const rng = seededRng(10);
+    const stats = (rank: "white" | "red") => {
+      let slipped = 0;
+      let total = 0;
+      for (let i = 0; i < 2000; i++) {
+        const s = buildRevealPlan(55, rank, all, rng).slips.ones;
+        if (s > 0) slipped++;
+        total += s;
+      }
+      return { rate: slipped / 2000, avg: total / 2000 };
+    };
+    const w = stats("white");
+    const r = stats("red");
+    expect(w.rate).toBeGreaterThan(0.5);
+    expect(r.avg).toBeGreaterThan(w.avg);
+  });
+});
