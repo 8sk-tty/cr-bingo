@@ -38,7 +38,7 @@ const POWER: Record<Rank, number> = {
 };
 
 interface ReelView {
-  id: number; // 抽選ごとに変えてリールを作り直す
+  id: string; // 抽選ごとに変えてリールを作り直す
   strips: Strips;
   lock: 0 | 1 | 2 | 3; // 0=回転中 1=列確定 2=十の位確定 3=確定
   rank: Rank;
@@ -59,9 +59,23 @@ const symbolsFor = (r: ReelView, c: Col) =>
     ? r.strips[c].symbols
     : GENERIC;
 
+interface Cutin {
+  id: number;
+  text: string;
+  sub: string;
+  tone: Rank | "jackpot";
+}
+const CUTIN_SUB: Partial<Record<Rank, string>> = {
+  red: "期待度 UP",
+  gold: "大チャンス",
+  rainbow: "PREMIUM",
+};
+const CUTIN_LEVEL: Partial<Record<Rank, 1 | 2 | 3>> = { red: 1, gold: 2, rainbow: 3 };
+let cutinSeq = 0;
+
 let reelSeq = 0;
 const makeReel = (n: number, remaining: number[], rank: Rank, lock: ReelView["lock"]): ReelView => ({
-  id: ++reelSeq,
+  id: `${Date.now().toString(36)}-${++reelSeq}`,
   strips: buildStrips(n, remaining),
   lock,
   rank,
@@ -103,7 +117,8 @@ export default function BingoStage() {
     return last ? last.numbers.map((n) => makeReel(n, rem, last.rank, 3)) : [];
   });
   const [hold, setHold] = useState<{ rank: Rank; level: number } | null>(null);
-  const [telop, setTelop] = useState<string | null>(null);
+  const [cutin, setCutin] = useState<Cutin | null>(null);
+  const [shake, setShake] = useState(0);
   const [banner, setBanner] = useState<string | null>(null);
   const [flash, setFlash] = useState(0);
   const [muted, setMutedState] = useState(false);
@@ -149,6 +164,18 @@ export default function BingoStage() {
     setReelsBoth(reelsRef.current.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   const bigFlash = () => setFlash((f) => f + 1);
+  const shakeStage = () => setShake((x) => x + 1);
+
+  // カットイン（スキップ中は出さない）
+  const showCutin = async (text: string, sub: string, tone: Cutin["tone"], level: 1 | 2 | 3, ms = 1500) => {
+    if (skipRef.current) return;
+    setCutin({ id: ++cutinSeq, text, sub, tone });
+    sfx.sfxCutin(level);
+    bigFlash();
+    shakeStage();
+    await wait(ms);
+    setCutin(null);
+  };
 
   const onCell = (fast: boolean) => {
     if (skipRef.current) return;
@@ -200,10 +227,7 @@ export default function BingoStage() {
     // カットイン
     if (telopText) {
       await wait(200);
-      setTelop(telopText);
-      play(sfx.sfxWhoosh);
-      await wait(1100);
-      setTelop(null);
+      await showCutin(telopText, CUTIN_SUB[rank] ?? "", rank, CUTIN_LEVEL[rank] ?? 1);
     }
     await wait(300 * pace);
     // 3. 一の位（減速 → 止まりかけ / 再始動）
@@ -248,10 +272,7 @@ export default function BingoStage() {
     if (plan.announce === "pre") {
       await wait(200);
       play(sfx.sfxKyuin);
-      bigFlash();
-      setBanner("3個同時!!");
-      await wait(1000);
-      setBanner(null);
+      await showCutin("3個同時!!", "JACKPOT 確定", "jackpot", 3, 1700);
       setReelsBoth(event.numbers.map((n) => makeReel(n, remainingBefore, rank, 0)));
       await nextFrame();
       await Promise.all(
@@ -265,10 +286,7 @@ export default function BingoStage() {
         bigFlash();
         await wait(900);
         play(sfx.sfxKyuin);
-        bigFlash();
-        setBanner("まだだ!! 3個同時!!");
-        await wait(1100);
-        setBanner(null);
+        await showCutin("まだだ!!", "3個同時 確定", "jackpot", 3, 1700);
         setReelsBoth([
           reelsRef.current[0],
           ...event.numbers.slice(1).map((n) => makeReel(n, remainingBefore, rank, 0)),
@@ -286,6 +304,7 @@ export default function BingoStage() {
     skipRef.current = false;
     sfx.sfxImpact();
     bigFlash();
+    shakeStage();
     if (event.jackpot) {
       sfx.sfxFanfare();
       setBanner("JACKPOT ×" + event.numbers.length);
@@ -372,7 +391,15 @@ export default function BingoStage() {
   const finished = shown.remaining.length === 0;
 
   return (
-    <main className={"stage" + (shown.rushLeft > 0 ? " rush" : "")} onClick={onAction}>
+    <main
+      className={
+        "stage" +
+        (shown.rushLeft > 0 ? " rush" : "") +
+        // 同じアニメーションを再生し直すため、2つのクラスを交互に付け替える
+        (shake > 0 ? (shake % 2 ? " shake-a" : " shake-b") : "")
+      }
+      onClick={onAction}
+    >
       <header className="topbar">
         <span className="logo">CR BINGO NEON</span>
         <span className="stat">
@@ -462,17 +489,24 @@ export default function BingoStage() {
         ))}
       </aside>
 
-      {telop && (
-        <div className="telop" key={telop}>
-          <span>{telop}</span>
+      {cutin && (
+        <div className={`cutin tone-${cutin.tone}`} key={"cutin" + cutin.id}>
+          <div className="cutin-rays" />
+          <div className="cutin-band b1" />
+          <div className="cutin-band b2" />
+          <div className="cutin-lines" />
+          <div className="cutin-text" data-text={cutin.text}>
+            {cutin.text}
+          </div>
+          {cutin.sub && <div className="cutin-sub">{cutin.sub}</div>}
         </div>
       )}
       {banner && (
-        <div className="banner" key={banner}>
+        <div className="banner" key={"banner" + banner}>
           {banner}
         </div>
       )}
-      {flash > 0 && <div className="flash" key={flash} />}
+      {flash > 0 && <div className="flash" key={"flash" + flash} />}
     </main>
   );
 }
