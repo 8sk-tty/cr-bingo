@@ -43,3 +43,6 @@ next-env.d.ts
 # devflow
 .worktrees/
 .devflow/
+
+# playwright mcp
+.playwright-mcp/

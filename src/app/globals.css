@@ -1,26 +1,343 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #05030f;
+  --bg2: #0d0830;
+  --cyan: #2ff3ff;
+  --pink: #ff2fb4;
+  --purple: #9b5cff;
+  --yellow: #ffe53f;
+  --text: #f4f1ff;
+  --rank: #f5f5ff;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* ---- ランク色 ---- */
+.rank-white { --rank: #f5f5ff; }
+.rank-blue { --rank: #3fa9ff; }
+.rank-green { --rank: #3dff8a; }
+.rank-red { --rank: #ff3355; }
+.rank-gold { --rank: #ffd23f; }
+.rank-rainbow { --rank: #ff5cf0; }
+
+/* ---- 全体 ---- */
+.stage {
+  position: relative;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr minmax(320px, 30vw);
+  grid-template-rows: auto 1fr;
+  background:
+    radial-gradient(ellipse at 35% 55%, var(--bg2) 0%, var(--bg) 70%),
+    var(--bg);
+  font-family: var(--font-orbitron), "Hiragino Sans", "Noto Sans JP", sans-serif;
+  user-select: none;
+  cursor: pointer;
+  transition: background 0.6s;
+}
+.stage::before {
+  /* 走るネオンライン */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    115deg,
+    transparent 0 120px,
+    rgb(47 243 255 / 0.05) 120px 122px,
+    transparent 122px 240px,
+    rgb(255 47 180 / 0.05) 240px 242px
+  );
+  animation: lines 12s linear infinite;
+}
+.stage.rush {
+  background:
+    radial-gradient(ellipse at 35% 55%, #3a0a4a 0%, #12021f 70%),
+    #12021f;
+}
+.stage.rush::before {
+  animation-duration: 3s;
+  background: repeating-linear-gradient(
+    115deg,
+    transparent 0 80px,
+    rgb(255 47 180 / 0.14) 80px 84px,
+    transparent 84px 160px
+  );
+}
+@keyframes lines {
+  from { background-position: 0 0; }
+  to { background-position: 720px 0; }
+}
+
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 2.5vw;
+  padding: 1.2vh 2vw;
+  font-size: 2.2vh;
+  border-bottom: 2px solid rgb(47 243 255 / 0.4);
+  box-shadow: 0 0 18px rgb(47 243 255 / 0.25);
+  z-index: 1;
+}
+.logo {
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  color: var(--pink);
+  text-shadow: 0 0 6px var(--pink), 0 0 18px var(--pink);
+}
+.stat {
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-weight: 700;
+}
+.stat b {
+  font-family: var(--font-orbitron), sans-serif;
+  color: var(--cyan);
+  text-shadow: 0 0 8px var(--cyan);
+  font-size: 1.3em;
+}
+.rush-badge {
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-weight: 900;
+  color: var(--yellow);
+  text-shadow: 0 0 8px var(--yellow), 0 0 20px var(--pink);
+  animation: blink 0.6s steps(2) infinite;
+}
+.mute {
+  margin-left: auto;
+  font-size: 2.6vh;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+@keyframes blink {
+  50% { opacity: 0.45; }
+}
+
+/* ---- 中央 ---- */
+.center {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  z-index: 1;
+}
+.hold-slot {
+  height: 7vh;
+  display: flex;
+  align-items: center;
+}
+.hold {
+  width: 6vh;
+  height: 6vh;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff 0%, var(--rank) 45%, transparent 75%);
+  box-shadow: 0 0 20px var(--rank), 0 0 50px var(--rank);
+  animation: hold-pop 0.3s ease-out;
+}
+.hold.rank-rainbow,
+.reel.rank-rainbow.lock1 .letter,
+.reel.rank-rainbow.lock2 .letter,
+.reel.rank-rainbow.lock3 .letter {
+  animation: rainbow 0.8s linear infinite;
+}
+@keyframes hold-pop {
+  from { transform: scale(0.3); filter: brightness(3); }
+}
+@keyframes rainbow {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+.reels {
+  display: flex;
+  gap: 3vw;
+  align-items: center;
+  justify-content: center;
+  min-height: 46vh;
+}
+.idle-hint {
+  font-size: 4vh;
+  color: var(--cyan);
+  text-shadow: 0 0 10px var(--cyan);
+  animation: blink 1.4s ease-in-out infinite;
+}
+.reel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+.reel .letter {
+  font-weight: 900;
+  font-size: 9vh;
+  color: #666;
+  transition: color 0.15s;
+}
+.reel:not(.lock0) .letter {
+  color: var(--rank);
+  text-shadow: 0 0 10px var(--rank), 0 0 30px var(--rank), 0 0 60px var(--rank);
+}
+.reel .num {
+  display: flex;
+  font-weight: 900;
+  font-size: 36vh;
+  font-variant-numeric: tabular-nums;
+}
+.reels.n3 { gap: 5vw; }
+.reels.n3 .num { font-size: 17vh; }
+.reels.n3 .letter { font-size: 6vh; }
+.digit {
+  min-width: 0.75em;
+  text-align: center;
+}
+.digit.wait {
+  color: #333;
+}
+.digit.spin {
+  color: #bfefff;
+  text-shadow: 0 0 8px var(--cyan);
+  filter: blur(0.5px);
+}
+.digit.locked {
+  color: #fff;
+  text-shadow: 0 0 6px #fff, 0 0 20px var(--cyan), 0 0 50px var(--cyan), 0 0 90px var(--purple);
+}
+.reel.lock3 .digit.locked {
+  animation: impact 0.45s ease-out;
+}
+.reel.fake .num {
+  animation: fake-stop 1s ease-in-out;
+  color: #fff;
+}
+@keyframes impact {
+  0% { transform: scale(1.35); filter: brightness(2.5); }
+  40% { transform: scale(0.95) translateX(-6px); }
+  60% { transform: translateX(6px); }
+  100% { transform: none; }
+}
+@keyframes fake-stop {
+  0%, 70% { filter: brightness(1.8); }
+  85% { transform: translateY(-2vh); }
+  100% { transform: none; }
+}
+.keys {
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 1.6vh;
+  opacity: 0.45;
+}
+
+/* ---- 抽選済みボード ---- */
+.board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5vw;
+  padding: 1.5vh 1.2vw;
+  border-left: 2px solid rgb(255 47 180 / 0.35);
+  box-shadow: inset 12px 0 30px -20px var(--pink);
+  z-index: 1;
+}
+.col {
+  display: grid;
+  grid-template-rows: repeat(16, 1fr);
+  gap: 0.35vh;
+}
+.col-head {
+  text-align: center;
+  font-weight: 900;
+  font-size: 3.4vh;
+  color: var(--pink);
+  text-shadow: 0 0 8px var(--pink);
+}
+.cell {
+  display: grid;
+  place-items: center;
+  font-size: 2.6vh;
+  font-weight: 700;
+  color: #3a3550;
+  border-radius: 0.6vh;
+}
+.cell.on {
+  color: #fff;
+  background: rgb(47 243 255 / 0.12);
+  text-shadow: 0 0 6px var(--cyan), 0 0 14px var(--cyan);
+  box-shadow: inset 0 0 0 1px rgb(47 243 255 / 0.5);
+}
+.cell.latest {
+  color: #111;
+  background: var(--yellow);
+  text-shadow: none;
+  box-shadow: 0 0 14px var(--yellow), 0 0 30px var(--pink);
+  animation: blink 0.5s steps(2) 6;
+}
+
+/* ---- カットイン・バナー・フラッシュ ---- */
+.telop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 5;
+}
+.telop span {
+  width: 140vw;
+  padding: 3vh 0;
+  text-align: center;
+  font-family: var(--font-dela), sans-serif;
+  font-size: 16vh;
+  color: #fff;
+  background: linear-gradient(90deg, transparent, rgb(255 47 80 / 0.92) 20%, rgb(255 47 180 / 0.92) 80%, transparent);
+  text-shadow: 0 0 10px #fff, 0 0 30px var(--yellow), 6px 6px 0 #000;
+  transform: rotate(-8deg);
+  animation: cutin 1.1s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+@keyframes cutin {
+  0% { transform: rotate(-8deg) translateX(110%) skewX(-20deg); }
+  18% { transform: rotate(-8deg) translateX(0) skewX(-10deg); }
+  82% { transform: rotate(-8deg) translateX(-2%) skewX(-10deg); opacity: 1; }
+  100% { transform: rotate(-8deg) translateX(-110%) skewX(-20deg); opacity: 0; }
+}
+.banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40%;
+  text-align: center;
+  font-family: var(--font-dela), sans-serif;
+  font-size: 13vh;
+  color: var(--yellow);
+  text-shadow: 0 0 10px #fff, 0 0 30px var(--yellow), 0 0 70px var(--pink), 6px 6px 0 #000;
+  pointer-events: none;
+  z-index: 6;
+  animation: banner 0.5s ease-out;
+}
+@keyframes banner {
+  from { transform: scale(2.4); opacity: 0; }
+}
+.flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  z-index: 7;
+  animation: flash 0.35s ease-out forwards;
+}
+@keyframes flash {
+  from { opacity: 0.75; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash { animation-duration: 0.15s; opacity: 0.3; }
 }
