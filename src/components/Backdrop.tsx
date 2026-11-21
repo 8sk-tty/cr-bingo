@@ -1,14 +1,12 @@
 "use client";
 
-// 背景の動く演出（canvas）。テーマと熱さ（level）で描き方を変える。
+// 背景の動く演出（canvas、黒金テーマ）。熱さ（level）で描き方を変える。
 // level: 0=通常 1=チャンス（赤以上の予告） 2=3個同時の告知 3=確変中
 import { useEffect, useRef } from "react";
 
-export type Theme = "gold" | "space";
 export type StageLevel = 0 | 1 | 2 | 3;
 
 interface Props {
-  theme: Theme;
   level: StageLevel;
 }
 
@@ -20,24 +18,15 @@ interface Ember {
   phase: number;
   hue: number;
 }
-interface Star {
-  x: number;
-  y: number;
-  z: number;
-  pz: number;
-}
-
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-export default function Backdrop({ theme, level }: Props) {
+export default function Backdrop({ level }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const levelRef = useRef(level);
-  const themeRef = useRef(theme);
 
   useEffect(() => {
     levelRef.current = level;
-    themeRef.current = theme;
-  }, [level, theme]);
+  }, [level]);
 
   useEffect(() => {
     const cv = canvas.current;
@@ -65,10 +54,6 @@ export default function Backdrop({ theme, level }: Props) {
       phase: rand(0, Math.PI * 2),
       hue: rand(20, 48),
     }));
-    const stars: Star[] = Array.from({ length: 500 }, () => {
-      const z = rand(0.05, 1);
-      return { x: rand(-1, 1), y: rand(-1, 1), z, pz: z };
-    });
     let bolt = 0; // 雷光の残り時間
     let boltPath: [number, number][] = [];
     let smooth = 0; // level を滑らかに追従
@@ -150,64 +135,11 @@ export default function Backdrop({ theme, level }: Props) {
       ctx.globalCompositeOperation = "source-over";
     };
 
-    const drawSpace = (t: number, dt: number, lv: number) => {
-      const L = levelRef.current;
-      ctx.fillStyle = "#01030a";
-      ctx.fillRect(0, 0, w, h);
-      // 星雲
-      ctx.globalCompositeOperation = "lighter";
-      const blobs: [number, number, string][] =
-        L === 1
-          ? [[0.3, 0.4, "255,40,60"], [0.75, 0.7, "180,20,40"]]
-          : L === 3
-            ? [[0.3, 0.4, "255,60,200"], [0.7, 0.65, "120,60,255"]]
-            : [[0.3, 0.4, "40,90,255"], [0.72, 0.68, "130,50,255"]];
-      for (const [i, [bx, by, col]] of blobs.entries()) {
-        const x = (bx + 0.05 * Math.sin(t * 0.0002 + i)) * w;
-        const y = (by + 0.05 * Math.cos(t * 0.00017 + i)) * h;
-        const r = Math.max(w, h) * 0.45;
-        const ng = ctx.createRadialGradient(x, y, 0, x, y, r);
-        ng.addColorStop(0, `rgba(${col},${0.16 + lv * 0.05})`);
-        ng.addColorStop(1, `rgba(${col},0)`);
-        ctx.fillStyle = ng;
-        ctx.fillRect(0, 0, w, h);
-      }
-      // ワープする星
-      const cx = w * 0.36;
-      const cy = h * 0.55;
-      const speed = [0.12, 0.45, 2.2, 0.8][L] * (0.5 + smooth * 0.5);
-      const fov = Math.min(w, h) * 0.6;
-      for (const s of stars) {
-        s.pz = s.z;
-        s.z -= speed * dt;
-        if (s.z <= 0.02) {
-          s.x = rand(-1, 1);
-          s.y = rand(-1, 1);
-          s.z = 1;
-          s.pz = 1;
-        }
-        const sx = cx + (s.x / s.z) * fov;
-        const sy = cy + (s.y / s.z) * fov;
-        const px = cx + (s.x / s.pz) * fov;
-        const py = cy + (s.y / s.pz) * fov;
-        const b = Math.min(1, (1 - s.z) * 1.4);
-        const col = L === 1 ? `255,${120 + 100 * b},${120 + 100 * b}` : L === 3 ? `255,${170 + 80 * b},255` : `${190 + 65 * b},${220 + 35 * b},255`;
-        ctx.strokeStyle = `rgba(${col},${b})`;
-        ctx.lineWidth = Math.max(0.6, (1 - s.z) * 2.6);
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(sx, sy);
-        ctx.stroke();
-      }
-      ctx.globalCompositeOperation = "source-over";
-    };
-
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       smooth += (levelRef.current - smooth) * Math.min(1, dt * 3);
-      if (themeRef.current === "gold") drawGold(now, dt, smooth);
-      else drawSpace(now, dt, smooth);
+      drawGold(now, dt, smooth);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);

@@ -6,8 +6,7 @@
   --rank: #f5f5ff;
 }
 
-/* ---- テーマ ---- */
-/* A. 黒×金 */
+/* ---- テーマ（黒×金） ---- */
 .stage[data-theme="gold"] {
   --accent: #ffc94a; /* 金 */
   --accent2: #e3262f; /* 紅 */
@@ -18,18 +17,6 @@
   --digit-w: 0.88em;
   --font-logo: var(--font-dela);
 }
-/* B. 宇宙・SF */
-.stage[data-theme="space"] {
-  --accent: #59d0ff; /* 青白 */
-  --accent2: #ff3b4e; /* 警告赤 */
-  --accent3: #3f6bff;
-  --hi: #ffe066;
-  --line: rgb(89 208 255 / 0.45);
-  --font-num: var(--font-orbitron);
-  --digit-w: 0.78em;
-  --font-logo: var(--font-orbitron);
-}
-
 html,
 body {
   height: 100%;
@@ -100,63 +87,12 @@ body {
   outline: 0.25vh solid rgb(255 201 74 / 0.25);
   outline-offset: 2.5vh;
 }
-.stage[data-theme="space"] .emblem::before {
-  background: repeating-conic-gradient(rgb(89 208 255 / 0.5) 0 0.6deg, transparent 0.6deg 6deg);
-  -webkit-mask-image: radial-gradient(circle, transparent 60%, #000 61%, #000 64%, transparent 65%);
-  mask-image: radial-gradient(circle, transparent 60%, #000 61%, #000 64%, transparent 65%);
-  animation: spin 40s linear infinite reverse;
-}
-.stage[data-theme="space"] .emblem::after {
-  inset: 10%;
-  border: 0.3vh dashed rgb(89 208 255 / 0.4);
-  box-shadow: 0 0 2vh rgb(89 208 255 / 0.25);
-  animation: spin 25s linear infinite;
-}
 .stage.lv1 .emblem,
 .stage.lv3 .emblem { opacity: 0.85; filter: hue-rotate(-30deg) saturate(2); }
-.stage[data-theme="space"].lv1 .emblem { filter: hue-rotate(160deg) saturate(3); }
 .stage.lv2 .emblem { opacity: 1; filter: brightness(1.8); }
 .stage.lv2 .emblem::before { animation-duration: 3s; }
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-/* 宇宙テーマのチャンス時: 警告帯 */
-.warning {
-  position: absolute;
-  left: 0;
-  width: calc(100% - max(320px, 30vw));
-  height: 4.5vh;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 2;
-  background: repeating-linear-gradient(-45deg, rgb(255 59 78 / 0.85) 0 2vh, rgb(30 0 0 / 0.85) 2vh 4vh);
-  animation: blink 0.5s steps(2) infinite;
-}
-.warning span {
-  margin: 0 auto;
-  padding: 0 2vw;
-  background: #000;
-  color: #ff3b4e;
-  font-weight: 900;
-  font-size: 2.8vh;
-  letter-spacing: 0.4em;
-}
-.warning.top { top: 8vh; }
-.warning.bottom { bottom: 2vh; }
-
-.theme-btn {
-  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
-  font-weight: 700;
-  font-size: 1.8vh;
-  padding: 0.4vh 1vw;
-  color: var(--accent);
-  background: rgb(0 0 0 / 0.4);
-  border: 1px solid var(--line);
-  border-radius: 0.6vh;
-  cursor: pointer;
 }
 
 .topbar {
@@ -313,7 +249,7 @@ body {
   height: 1.7em;
   font-size: 1em;
 }
-.rc.digit .rc-cell[data-center="0"] { opacity: 0.55; }
+.rc.digit .rc-cell[data-center="0"] { opacity: 0.3; }
 .rc.digit.lit .rc-cell[data-center="1"] {
   color: #fff;
 }
