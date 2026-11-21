@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_CONFIG,
-  columnOf,
   createGame,
   cryptoRng,
   drawEvent,
@@ -11,8 +10,10 @@ import {
   type GameState,
   type Rank,
 } from "@/lib/lottery";
-import { buildEventPlan, tensOf, type RevealPlan, type Tens } from "@/lib/reveal";
+import { buildEventPlan, type RevealPlan } from "@/lib/reveal";
+import { buildStrips, type Strips } from "@/lib/strips";
 import * as sfx from "@/lib/sound";
+import ReelColumn, { type ReelHandle } from "./ReelColumn";
 
 const STORAGE_KEY = "cr-bingo:v1";
 const LETTERS = ["B", "I", "N", "G", "O"] as const;
@@ -26,37 +27,47 @@ const PACE: Record<Rank, number> = {
   gold: 1.6,
   rainbow: 1.8,
 };
+// 一の位の減速カーブ（大きいほど最後がねっとり遅い）
+const POWER: Record<Rank, number> = {
+  white: 3,
+  blue: 3,
+  green: 3.5,
+  red: 4,
+  gold: 4.5,
+  rainbow: 5,
+};
 
 interface ReelView {
-  letter: string;
-  tens: string;
-  ones: string;
+  id: number; // 抽選ごとに変えてリールを作り直す
+  strips: Strips;
   lock: 0 | 1 | 2 | 3; // 0=回転中 1=列確定 2=十の位確定 3=確定
   rank: Rank;
   fake?: boolean; // 一度止まったように見せている状態
 }
+type Col = "letter" | "tens" | "ones";
+type ReelHandles = Partial<Record<Col, ReelHandle | null>>;
 
 interface Saved {
   history: GameState[]; // history[0] = 初期状態
   events: DrawEvent[]; // events[i] が history[i] → history[i+1] を作った
 }
 
-const fmtTens = (t: Tens) => (t === null ? "" : String(t));
-const spinningReel = (rank: Rank = "white"): ReelView => ({
-  letter: "?",
-  tens: "",
-  ones: "",
-  lock: 0,
+// 前の段階が止まるまでは中身を明かさないダミーの帯
+const GENERIC = Array.from({ length: 10 }, (_, d) => ({ label: String(d), live: true }));
+const symbolsFor = (r: ReelView, c: Col) =>
+  c === "letter" || (c === "tens" && r.lock >= 1) || (c === "ones" && r.lock >= 2)
+    ? r.strips[c].symbols
+    : GENERIC;
+
+let reelSeq = 0;
+const makeReel = (n: number, remaining: number[], rank: Rank, lock: ReelView["lock"]): ReelView => ({
+  id: ++reelSeq,
+  strips: buildStrips(n, remaining),
+  lock,
   rank,
 });
-const lockedReel = (n: number, rank: Rank): ReelView => ({
-  letter: columnOf(n),
-  tens: fmtTens(tensOf(n)),
-  ones: String(n % 10),
-  lock: 3,
-  rank,
-});
-const pick = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
+const nextFrame = () =>
+  new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
 
 function initialSaved(): Saved {
   return { history: [createGame(DEFAULT_CONFIG)], events: [] };
@@ -88,7 +99,8 @@ export default function BingoStage() {
   const [playing, setPlaying] = useState(false);
   const [reels, setReels] = useState<ReelView[]>(() => {
     const last = saved.events.at(-1);
-    return last ? last.numbers.map((n) => lockedReel(n, last.rank)) : [];
+    const rem = saved.history[saved.history.length - 1].remaining;
+    return last ? last.numbers.map((n) => makeReel(n, rem, last.rank, 3)) : [];
   });
   const [hold, setHold] = useState<{ rank: Rank; level: number } | null>(null);
   const [telop, setTelop] = useState<string | null>(null);
@@ -100,6 +112,14 @@ export default function BingoStage() {
   const playingRef = useRef(false);
   const skipRef = useRef(false);
   const waiters = useRef(new Set<() => void>());
+  const handles = useRef<ReelHandles[]>([]);
+  const reelsRef = useRef<ReelView[]>(reels);
+  const lastTick = useRef(0);
+
+  const setReelsBoth = (next: ReelView[]) => {
+    reelsRef.current = next;
+    setReels(next);
+  };
 
   const commit = (s: Saved) => {
     savedRef.current = s;
@@ -126,38 +146,56 @@ export default function BingoStage() {
   };
 
   const updateReel = (i: number, patch: Partial<ReelView>) =>
-    setReels((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-
-  const spin = async (ms: number, frame: () => void, pitch = 1) => {
-    const end = Date.now() + ms;
-    while (Date.now() < end && !skipRef.current) {
-      frame();
-      play(() => sfx.sfxTick(pitch));
-      await wait(60);
-    }
-  };
+    setReelsBoth(reelsRef.current.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   const bigFlash = () => setFlash((f) => f + 1);
 
-  const runReel = async (
-    i: number,
-    plan: RevealPlan,
-    rank: Rank,
-    telopText: string | null,
-  ) => {
+  const onCell = (fast: boolean) => {
+    if (skipRef.current) return;
+    if (fast) {
+      const now = performance.now();
+      if (now - lastTick.current > 45) {
+        lastTick.current = now;
+        sfx.sfxTick();
+      }
+    } else sfx.sfxStep();
+  };
+
+  // スキップ中は即座に止める
+  const col = (i: number, c: Col) => {
+    const h = handles.current[i]?.[c];
+    const target = reelsRef.current[i].strips[c].target;
+    return {
+      target,
+      len: reelsRef.current[i].strips[c].symbols.length,
+      spin: () => {
+        if (!skipRef.current) h?.spin();
+      },
+      stop: (opts?: { minCells?: number; power?: number }, t = target) =>
+        skipRef.current || !h ? (h?.jump(t), Promise.resolve()) : h.stopAt(t, opts),
+      step: (ms: number) =>
+        skipRef.current || !h ? (h?.jump(target), Promise.resolve()) : h.stepTo(target, ms),
+      jump: () => h?.jump(target),
+    };
+  };
+
+  const runReel = async (i: number, plan: RevealPlan, rank: Rank, telopText: string | null) => {
     const pace = PACE[rank];
+    const L = col(i, "letter");
+    const T = col(i, "tens");
+    const O = col(i, "ones");
+    L.spin();
+    T.spin();
+    O.spin();
+    await wait(500 * pace);
     // 1. 列
-    await spin(500 * pace, () => updateReel(i, { letter: pick(plan.letterCandidates) }));
-    updateReel(i, { letter: plan.letter, lock: 1 });
+    await L.stop({ minCells: Math.round(5 * pace) });
+    updateReel(i, { lock: 1 });
     play(sfx.sfxLock);
     await wait(250 * pace);
     // 2. 十の位
-    await spin(
-      500 * pace,
-      () => updateReel(i, { tens: fmtTens(pick(plan.tensCandidates)) }),
-      1.1,
-    );
-    updateReel(i, { tens: fmtTens(plan.tens), lock: 2 });
+    await T.stop({ minCells: Math.round(5 * pace) });
+    updateReel(i, { lock: 2 });
     play(sfx.sfxLock);
     // カットイン
     if (telopText) {
@@ -167,34 +205,29 @@ export default function BingoStage() {
       await wait(1100);
       setTelop(null);
     }
-    // 3. 一の位（高速 → 減速）
-    await spin(
-      400 * pace,
-      () => updateReel(i, { ones: String(pick(plan.onesCandidates) % 10) }),
-      1.2,
-    );
-    const steps = plan.slowSteps;
-    for (let k = 0; k < steps.length; k++) {
-      const isLast = k === steps.length - 1;
-      if (isLast && plan.hesitation === "hesitate") {
-        await wait(900 * pace);
-      }
-      if (isLast && plan.hesitation === "respin") {
-        updateReel(i, { fake: true });
-        play(sfx.sfxLock);
-        await wait(1000 * pace);
-        updateReel(i, { fake: false });
-        play(sfx.sfxWhoosh);
-        await wait(250);
-      }
-      updateReel(i, { ones: String(steps[k] % 10) });
-      play(sfx.sfxStep);
-      if (!isLast) {
-        const t = (k + 1) / steps.length;
-        await wait((120 + 380 * t * t) * pace);
-      }
+    await wait(300 * pace);
+    // 3. 一の位（減速 → 止まりかけ / 再始動）
+    const slow = { minCells: 3 + plan.slowSteps.length, power: POWER[rank] };
+    const before = (O.target - 1 + O.len) % O.len;
+    if (plan.hesitation === "hesitate") {
+      await O.stop(slow, before);
+      await wait(900 * pace);
+      await O.step(650);
+    } else if (plan.hesitation === "respin") {
+      await O.stop(slow, before);
+      updateReel(i, { fake: true });
+      play(sfx.sfxLock);
+      await wait(1000 * pace);
+      updateReel(i, { fake: false });
+      play(sfx.sfxWhoosh);
+      O.spin();
+      await wait(400);
+      await O.stop({ minCells: 8, power: POWER[rank] });
+    } else {
+      await O.stop(slow);
     }
-    updateReel(i, { ones: String(plan.final % 10), lock: 3, fake: false });
+    O.jump();
+    updateReel(i, { lock: 3, fake: false });
   };
 
   const runEvent = async (event: DrawEvent, remainingBefore: number[]) => {
@@ -203,7 +236,7 @@ export default function BingoStage() {
     skipRef.current = false;
     playingRef.current = true;
     setPlaying(true);
-    setReels([spinningReel(rank)]);
+    setReelsBoth([makeReel(event.numbers[0], remainingBefore, rank, 0)]);
 
     // 保留変化
     for (let k = 0; k < plan.holdSteps.length; k++) {
@@ -219,11 +252,13 @@ export default function BingoStage() {
       setBanner("3個同時!!");
       await wait(1000);
       setBanner(null);
-      setReels(plan.reels.map(() => spinningReel(rank)));
+      setReelsBoth(event.numbers.map((n) => makeReel(n, remainingBefore, rank, 0)));
+      await nextFrame();
       await Promise.all(
         plan.reels.map((p, i) => runReel(i, p, rank, i === 0 ? plan.telop : null)),
       );
     } else {
+      await nextFrame();
       await runReel(0, plan.reels[0], rank, plan.telop);
       if (plan.announce === "post") {
         play(sfx.sfxImpact);
@@ -234,7 +269,11 @@ export default function BingoStage() {
         setBanner("まだだ!! 3個同時!!");
         await wait(1100);
         setBanner(null);
-        setReels((rs) => [rs[0], ...plan.reels.slice(1).map(() => spinningReel(rank))]);
+        setReelsBoth([
+          reelsRef.current[0],
+          ...event.numbers.slice(1).map((n) => makeReel(n, remainingBefore, rank, 0)),
+        ]);
+        await nextFrame();
         await Promise.all(
           plan.reels.slice(1).map((p, i) => runReel(i + 1, p, rank, null)),
         );
@@ -242,7 +281,8 @@ export default function BingoStage() {
     }
 
     // 確定（スキップ時もここは必ず鳴らす）
-    setReels(event.numbers.map((n) => lockedReel(n, rank)));
+    reelsRef.current.forEach((_, i) => (["letter", "tens", "ones"] as Col[]).forEach((c) => col(i, c).jump()));
+    setReelsBoth(reelsRef.current.map((r) => ({ ...r, lock: 3, fake: false })));
     skipRef.current = false;
     sfx.sfxImpact();
     bigFlash();
@@ -261,6 +301,9 @@ export default function BingoStage() {
     skipRef.current = true;
     waiters.current.forEach((f) => f());
     waiters.current.clear();
+    reelsRef.current.forEach((_, i) =>
+      (["letter", "tens", "ones"] as Col[]).forEach((c) => col(i, c).jump()),
+    );
   };
 
   const onAction = useCallback(() => {
@@ -282,14 +325,15 @@ export default function BingoStage() {
     const next = { history: s.history.slice(0, -1), events: s.events.slice(0, -1) };
     commit(next);
     const last = next.events.at(-1);
-    setReels(last ? last.numbers.map((n) => lockedReel(n, last.rank)) : []);
+    const rem = next.history[next.history.length - 1].remaining;
+    setReelsBoth(last ? last.numbers.map((n) => makeReel(n, rem, last.rank, 3)) : []);
   }, []);
 
   const onReset = useCallback(() => {
     if (playingRef.current) return;
     if (!window.confirm("新しいゲームを始めますか？（抽選履歴は消えます）")) return;
     commit(initialSaved());
-    setReels([]);
+    setReelsBoth([]);
   }, []);
 
   const onMute = useCallback(() => {
@@ -359,38 +403,37 @@ export default function BingoStage() {
         </div>
         <div className={`reels n${Math.max(1, reels.length)}`}>
           {reels.length === 0 ? (
-            <div className="idle-hint">
-              {finished ? "全番号 抽選済み" : "SPACE / クリックで抽選"}
-            </div>
+            <div className="idle-hint">SPACE / クリックで抽選</div>
           ) : (
-            reels.map((r, i) => (
-              <div
-                key={i}
-                className={`reel lock${r.lock} rank-${r.rank}${r.fake ? " fake" : ""}`}
-              >
-                <span className="letter">{r.letter}</span>
-                <span className="num">
-                  {!(r.lock >= 2 && r.tens === "") && (
-                    <span
-                      className={
-                        "digit" + (r.lock >= 2 ? " locked" : r.lock === 1 ? " spin" : " wait")
-                      }
-                    >
-                      {r.lock === 0 ? "-" : r.tens || " "}
-                    </span>
-                  )}
-                  <span
-                    className={
-                      "digit" + (r.lock >= 3 ? " locked" : r.lock === 2 ? " spin" : " wait")
-                    }
-                  >
-                    {r.lock < 2 ? "-" : r.ones}
-                  </span>
-                </span>
-              </div>
-            ))
+            reels.map((r, i) => {
+              const setH = (c: Col) => (h: ReelHandle | null) => {
+                (handles.current[i] ??= {})[c] = h;
+              };
+              const reelCol = (c: Col, cls: string, lit: boolean) => (
+                <ReelColumn
+                  ref={setH(c)}
+                  symbols={symbolsFor(r, c)}
+                  initial={r.lock === 3 ? r.strips[c].target : r.strips[c].target + 2}
+                  className={cls + (lit ? " lit" : "")}
+                  onCell={onCell}
+                />
+              );
+              return (
+                <div
+                  key={r.id}
+                  className={`reel lock${r.lock} rank-${r.rank}${r.fake ? " fake" : ""}`}
+                >
+                  {reelCol("letter", "letter", r.lock >= 1)}
+                  <div className="reel-window">
+                    {reelCol("tens", "digit", r.lock >= 2)}
+                    {reelCol("ones", "digit", r.lock >= 3 || !!r.fake)}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
+        {finished && !playing && <div className="complete">全番号 抽選済み</div>}
         <div className="keys">
           SPACE 抽選/スキップ ・ Z 取消 ・ R リセット ・ M 音 ・ F 全画面
         </div>
