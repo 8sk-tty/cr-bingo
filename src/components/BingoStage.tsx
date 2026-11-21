@@ -14,8 +14,19 @@ import { buildEventPlan, type RevealPlan } from "@/lib/reveal";
 import { buildStrips, type Strips } from "@/lib/strips";
 import * as sfx from "@/lib/sound";
 import ReelColumn, { type ReelHandle } from "./ReelColumn";
+import Backdrop, { type StageLevel, type Theme } from "./Backdrop";
 
 const STORAGE_KEY = "cr-bingo:v1";
+const THEME_KEY = "cr-bingo:theme";
+const THEME_LABEL: Record<Theme, string> = { gold: "黒金", space: "宇宙" };
+
+function loadTheme(): Theme {
+  try {
+    return localStorage.getItem(THEME_KEY) === "space" ? "space" : "gold";
+  } catch {
+    return "gold";
+  }
+}
 const LETTERS = ["B", "I", "N", "G", "O"] as const;
 
 // ランクが熱いほど各段階をゆっくり見せる
@@ -119,6 +130,10 @@ export default function BingoStage() {
   const [hold, setHold] = useState<{ rank: Rank; level: number } | null>(null);
   const [cutin, setCutin] = useState<Cutin | null>(null);
   const [shake, setShake] = useState(0);
+  const [theme, setTheme] = useState<Theme>(loadTheme);
+  const [level, setLevel] = useState<StageLevel>(() =>
+    saved.history[saved.history.length - 1].rushLeft > 0 ? 3 : 0,
+  );
   const [banner, setBanner] = useState<string | null>(null);
   const [flash, setFlash] = useState(0);
   const [muted, setMutedState] = useState(false);
@@ -269,9 +284,20 @@ export default function BingoStage() {
       await wait(320);
     }
 
+    // ステージチェンジ（赤以上は必ず、緑はときどき＝ガセ）
+    const hot = ["red", "gold", "rainbow"].includes(rank) || (rank === "green" && cryptoRng() < 0.3);
+    if (hot) {
+      setLevel(1);
+      play(sfx.sfxWhoosh);
+      play(sfx.sfxLock);
+      bigFlash();
+      await wait(500);
+    }
+
     if (plan.announce === "pre") {
       await wait(200);
       play(sfx.sfxKyuin);
+      setLevel(2);
       await showCutin("3個同時!!", "JACKPOT 確定", "jackpot", 3, 1700);
       setReelsBoth(event.numbers.map((n) => makeReel(n, remainingBefore, rank, 0)));
       await nextFrame();
@@ -286,6 +312,7 @@ export default function BingoStage() {
         bigFlash();
         await wait(900);
         play(sfx.sfxKyuin);
+        setLevel(2);
         await showCutin("まだだ!!", "3個同時 確定", "jackpot", 3, 1700);
         setReelsBoth([
           reelsRef.current[0],
@@ -311,6 +338,8 @@ export default function BingoStage() {
       setTimeout(() => setBanner(null), 2200);
     }
     setHold(null);
+    const after = savedRef.current.history[savedRef.current.history.length - 1];
+    setLevel(after.rushLeft > 0 ? 3 : 0);
     playingRef.current = false;
     setPlaying(false);
   };
@@ -346,6 +375,7 @@ export default function BingoStage() {
     const last = next.events.at(-1);
     const rem = next.history[next.history.length - 1].remaining;
     setReelsBoth(last ? last.numbers.map((n) => makeReel(n, rem, last.rank, 3)) : []);
+    setLevel(next.history[next.history.length - 1].rushLeft > 0 ? 3 : 0);
   }, []);
 
   const onReset = useCallback(() => {
@@ -353,6 +383,19 @@ export default function BingoStage() {
     if (!window.confirm("新しいゲームを始めますか？（抽選履歴は消えます）")) return;
     commit(initialSaved());
     setReelsBoth([]);
+    setLevel(0);
+  }, []);
+
+  const onTheme = useCallback(() => {
+    setTheme((t) => {
+      const next: Theme = t === "gold" ? "space" : "gold";
+      try {
+        localStorage.setItem(THEME_KEY, next);
+      } catch {
+        // 保存できなくても切り替えは効く
+      }
+      return next;
+    });
   }, []);
 
   const onMute = useCallback(() => {
@@ -372,6 +415,7 @@ export default function BingoStage() {
       } else if (k === "z") onUndo();
       else if (k === "r") onReset();
       else if (k === "m") onMute();
+      else if (k === "t") onTheme();
       else if (k === "f") {
         if (document.fullscreenElement) void document.exitFullscreen();
         else void document.documentElement.requestFullscreen();
@@ -379,7 +423,7 @@ export default function BingoStage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onAction, onUndo, onReset, onMute]);
+  }, [onAction, onUndo, onReset, onMute, onTheme]);
 
   // ---- 表示 ----
   // 演出中は結果をネタバレしないよう、1つ前の状態を表示する
@@ -392,16 +436,28 @@ export default function BingoStage() {
 
   return (
     <main
+      data-theme={theme}
       className={
-        "stage" +
-        (shown.rushLeft > 0 ? " rush" : "") +
+        "stage lv" +
+        level +
         // 同じアニメーションを再生し直すため、2つのクラスを交互に付け替える
         (shake > 0 ? (shake % 2 ? " shake-a" : " shake-b") : "")
       }
       onClick={onAction}
     >
+      <Backdrop theme={theme} level={level} />
+      {theme === "space" && level === 1 && (
+        <>
+          <div className="warning top">
+            <span>WARNING</span>
+          </div>
+          <div className="warning bottom">
+            <span>WARNING</span>
+          </div>
+        </>
+      )}
       <header className="topbar">
-        <span className="logo">CR BINGO NEON</span>
+        <span className="logo">CR BINGO</span>
         <span className="stat">
           抽選 <b>{shown.drawn.length}</b> / {DEFAULT_CONFIG.max}
         </span>
@@ -409,8 +465,18 @@ export default function BingoStage() {
           残り <b>{shown.remaining.length}</b>
         </span>
         {shown.rushLeft > 0 && (
-          <span className="rush-badge">NEON RUSH 残り{shown.rushLeft}回</span>
+          <span className="rush-badge">RUSH 残り{shown.rushLeft}回</span>
         )}
+        <button
+          className="theme-btn"
+          style={{ marginLeft: "auto" }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTheme();
+          }}
+        >
+          テーマ: {THEME_LABEL[theme]}（T）
+        </button>
         <button
           className="mute"
           onClick={(e) => {
@@ -423,6 +489,7 @@ export default function BingoStage() {
       </header>
 
       <section className="center">
+        <div className="emblem" />
         <div className="hold-slot">
           {hold && (
             <div key={hold.level} className={`hold rank-${hold.rank}`} />
@@ -462,7 +529,7 @@ export default function BingoStage() {
         </div>
         {finished && !playing && <div className="complete">全番号 抽選済み</div>}
         <div className="keys">
-          SPACE 抽選/スキップ ・ Z 取消 ・ R リセット ・ M 音 ・ F 全画面
+          SPACE 抽選/スキップ ・ Z 取消 ・ R リセット ・ M 音 ・ T テーマ ・ F 全画面
         </div>
       </section>
 

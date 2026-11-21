@@ -15,7 +15,7 @@ const dela = Dela_Gothic_One({
 });
 
 export const metadata: Metadata = {
-  title: "CR BINGO NEON",
+  title: "CR BINGO",
   description: "パチンコ風演出のビンゴ抽選アプリ",
 };
 

@@ -1,14 +1,33 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #05030f;
-  --bg2: #0d0830;
-  --cyan: #2ff3ff;
-  --pink: #ff2fb4;
-  --purple: #9b5cff;
-  --yellow: #ffe53f;
-  --text: #f4f1ff;
+  --bg: #020100;
+  --text: #fff8e8;
   --rank: #f5f5ff;
+}
+
+/* ---- テーマ ---- */
+/* A. 黒×金 */
+.stage[data-theme="gold"] {
+  --accent: #ffc94a; /* 金 */
+  --accent2: #e3262f; /* 紅 */
+  --accent3: #ff7a1a; /* 橙 */
+  --hi: #fff1a8;
+  --line: rgb(255 201 74 / 0.45);
+  --font-num: var(--font-dela);
+  --digit-w: 0.88em;
+  --font-logo: var(--font-dela);
+}
+/* B. 宇宙・SF */
+.stage[data-theme="space"] {
+  --accent: #59d0ff; /* 青白 */
+  --accent2: #ff3b4e; /* 警告赤 */
+  --accent3: #3f6bff;
+  --hi: #ffe066;
+  --line: rgb(89 208 255 / 0.45);
+  --font-num: var(--font-orbitron);
+  --digit-w: 0.78em;
+  --font-logo: var(--font-orbitron);
 }
 
 html,
@@ -35,46 +54,109 @@ body {
   display: grid;
   grid-template-columns: 1fr minmax(320px, 30vw);
   grid-template-rows: auto 1fr;
-  background:
-    radial-gradient(ellipse at 35% 55%, var(--bg2) 0%, var(--bg) 70%),
-    var(--bg);
+  background: var(--bg);
   font-family: var(--font-orbitron), "Hiragino Sans", "Noto Sans JP", sans-serif;
   user-select: none;
   cursor: pointer;
-  transition: background 0.6s;
 }
-.stage::before {
-  /* 走るネオンライン */
+.backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* リール背後の飾り（エンブレム） */
+.emblem {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78vh;
+  height: 78vh;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: 50%;
+  opacity: 0.55;
+  transition: opacity 0.5s, filter 0.5s;
+}
+.emblem::before,
+.emblem::after {
   content: "";
   position: absolute;
   inset: 0;
+  border-radius: 50%;
+}
+.stage[data-theme="gold"] .emblem::before {
+  background: repeating-conic-gradient(rgb(255 201 74 / 0.22) 0 2deg, transparent 2deg 15deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 38%, #000 40%, #000 62%, transparent 70%);
+  mask-image: radial-gradient(circle, transparent 38%, #000 40%, #000 62%, transparent 70%);
+  animation: spin 60s linear infinite;
+}
+.stage[data-theme="gold"] .emblem::after {
+  inset: 6%;
+  border: 0.5vh solid rgb(255 201 74 / 0.35);
+  box-shadow: 0 0 3vh rgb(255 170 40 / 0.35), inset 0 0 3vh rgb(255 170 40 / 0.25);
+  outline: 0.25vh solid rgb(255 201 74 / 0.25);
+  outline-offset: 2.5vh;
+}
+.stage[data-theme="space"] .emblem::before {
+  background: repeating-conic-gradient(rgb(89 208 255 / 0.5) 0 0.6deg, transparent 0.6deg 6deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 60%, #000 61%, #000 64%, transparent 65%);
+  mask-image: radial-gradient(circle, transparent 60%, #000 61%, #000 64%, transparent 65%);
+  animation: spin 40s linear infinite reverse;
+}
+.stage[data-theme="space"] .emblem::after {
+  inset: 10%;
+  border: 0.3vh dashed rgb(89 208 255 / 0.4);
+  box-shadow: 0 0 2vh rgb(89 208 255 / 0.25);
+  animation: spin 25s linear infinite;
+}
+.stage.lv1 .emblem,
+.stage.lv3 .emblem { opacity: 0.85; filter: hue-rotate(-30deg) saturate(2); }
+.stage[data-theme="space"].lv1 .emblem { filter: hue-rotate(160deg) saturate(3); }
+.stage.lv2 .emblem { opacity: 1; filter: brightness(1.8); }
+.stage.lv2 .emblem::before { animation-duration: 3s; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 宇宙テーマのチャンス時: 警告帯 */
+.warning {
+  position: absolute;
+  left: 0;
+  width: calc(100% - max(320px, 30vw));
+  height: 4.5vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
   pointer-events: none;
-  background: repeating-linear-gradient(
-    115deg,
-    transparent 0 120px,
-    rgb(47 243 255 / 0.05) 120px 122px,
-    transparent 122px 240px,
-    rgb(255 47 180 / 0.05) 240px 242px
-  );
-  animation: lines 12s linear infinite;
+  z-index: 2;
+  background: repeating-linear-gradient(-45deg, rgb(255 59 78 / 0.85) 0 2vh, rgb(30 0 0 / 0.85) 2vh 4vh);
+  animation: blink 0.5s steps(2) infinite;
 }
-.stage.rush {
-  background:
-    radial-gradient(ellipse at 35% 55%, #3a0a4a 0%, #12021f 70%),
-    #12021f;
+.warning span {
+  margin: 0 auto;
+  padding: 0 2vw;
+  background: #000;
+  color: #ff3b4e;
+  font-weight: 900;
+  font-size: 2.8vh;
+  letter-spacing: 0.4em;
 }
-.stage.rush::before {
-  animation-duration: 3s;
-  background: repeating-linear-gradient(
-    115deg,
-    transparent 0 80px,
-    rgb(255 47 180 / 0.14) 80px 84px,
-    transparent 84px 160px
-  );
-}
-@keyframes lines {
-  from { background-position: 0 0; }
-  to { background-position: 720px 0; }
+.warning.top { top: 8vh; }
+.warning.bottom { bottom: 2vh; }
+
+.theme-btn {
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-weight: 700;
+  font-size: 1.8vh;
+  padding: 0.4vh 1vw;
+  color: var(--accent);
+  background: rgb(0 0 0 / 0.4);
+  border: 1px solid var(--line);
+  border-radius: 0.6vh;
+  cursor: pointer;
 }
 
 .topbar {
@@ -84,15 +166,17 @@ body {
   gap: 2.5vw;
   padding: 1.2vh 2vw;
   font-size: 2.2vh;
-  border-bottom: 2px solid rgb(47 243 255 / 0.4);
-  box-shadow: 0 0 18px rgb(47 243 255 / 0.25);
+  border-bottom: 2px solid var(--line);
+  box-shadow: 0 0 18px var(--line);
+  background: linear-gradient(rgb(0 0 0 / 0.6), rgb(0 0 0 / 0.2));
   z-index: 1;
 }
 .logo {
+  font-family: var(--font-logo), sans-serif;
   font-weight: 900;
   letter-spacing: 0.15em;
-  color: var(--pink);
-  text-shadow: 0 0 6px var(--pink), 0 0 18px var(--pink);
+  color: var(--accent2);
+  text-shadow: 0 0 6px var(--accent2), 0 0 18px var(--accent2);
 }
 .stat {
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
@@ -100,19 +184,18 @@ body {
 }
 .stat b {
   font-family: var(--font-orbitron), sans-serif;
-  color: var(--cyan);
-  text-shadow: 0 0 8px var(--cyan);
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent);
   font-size: 1.3em;
 }
 .rush-badge {
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
   font-weight: 900;
-  color: var(--yellow);
-  text-shadow: 0 0 8px var(--yellow), 0 0 20px var(--pink);
+  color: var(--hi);
+  text-shadow: 0 0 8px var(--hi), 0 0 20px var(--accent2);
   animation: blink 0.6s steps(2) infinite;
 }
 .mute {
-  margin-left: auto;
   font-size: 2.6vh;
   background: none;
   border: none;
@@ -165,11 +248,12 @@ body {
 }
 .idle-hint {
   font-size: 4vh;
-  color: var(--cyan);
-  text-shadow: 0 0 10px var(--cyan);
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent);
   animation: blink 1.4s ease-in-out infinite;
 }
 .reel {
+  font-family: var(--font-num), sans-serif;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -181,6 +265,7 @@ body {
 .reels.n3 { gap: 4vw; }
 
 /* ---- リール1本 ---- */
+/* はみ出しは隠して上下をフェード。光はリールの外（.reel の drop-shadow）で付ける（内側で付けると四角く切れるため） */
 .rc {
   position: relative;
   overflow: hidden;
@@ -197,14 +282,14 @@ body {
   top: calc(50% - 0.5em);
   height: 1em;
   text-align: center;
-  color: #d9d4ff;
+  color: color-mix(in srgb, var(--accent) 35%, #fff);
   will-change: transform;
 }
-.rc-cell[data-live="false"] { color: #3a3550; }
+.rc-cell[data-live="false"] { color: rgb(255 255 255 / 0.18); }
 .rc[data-fast="1"] .rc-cell {
   filter: blur(0.04em);
-  color: #bfefff;
-  text-shadow: 0 0.12em 0 rgb(47 243 255 / 0.35), 0 -0.12em 0 rgb(47 243 255 / 0.35);
+  color: color-mix(in srgb, var(--accent) 50%, #fff);
+  text-shadow: 0 0.12em 0 var(--line), 0 -0.12em 0 var(--line);
 }
 .rc.letter {
   font-size: var(--letter);
@@ -214,7 +299,6 @@ body {
 .rc.letter .rc-cell[data-center="0"] { opacity: 0.4; }
 .rc.letter.lit .rc-cell[data-center="1"] {
   color: var(--rank);
-  text-shadow: 0 0 10px var(--rank), 0 0 30px var(--rank), 0 0 60px var(--rank);
 }
 .reel.rank-rainbow .rc.letter.lit { animation: rainbow 0.8s linear infinite; }
 
@@ -225,14 +309,16 @@ body {
   font-size: var(--digit);
 }
 .rc.digit {
-  width: 0.78em;
+  width: var(--digit-w);
   height: 1.7em;
   font-size: 1em;
 }
 .rc.digit .rc-cell[data-center="0"] { opacity: 0.55; }
 .rc.digit.lit .rc-cell[data-center="1"] {
   color: #fff;
-  text-shadow: 0 0 0.02em #fff, 0 0 0.07em var(--cyan), 0 0 0.16em var(--cyan), 0 0 0.3em var(--purple);
+}
+.reel {
+  filter: drop-shadow(0 0 0.8vh var(--accent)) drop-shadow(0 0 3.5vh var(--accent3));
 }
 .reel.lock3 .reel-window {
   animation: impact 0.45s ease-out;
@@ -255,8 +341,8 @@ body {
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
   font-weight: 900;
   font-size: 3.5vh;
-  color: var(--yellow);
-  text-shadow: 0 0 10px var(--yellow);
+  color: var(--hi);
+  text-shadow: 0 0 10px var(--hi);
 }
 .keys {
   font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
@@ -270,8 +356,9 @@ body {
   grid-template-columns: repeat(5, 1fr);
   gap: 0.5vw;
   padding: 1.5vh 1.2vw;
-  border-left: 2px solid rgb(255 47 180 / 0.35);
-  box-shadow: inset 12px 0 30px -20px var(--pink);
+  border-left: 2px solid var(--line);
+  background: rgb(0 0 0 / 0.72);
+  box-shadow: inset 12px 0 30px -20px var(--accent2);
   z-index: 1;
 }
 .col {
@@ -283,36 +370,36 @@ body {
   text-align: center;
   font-weight: 900;
   font-size: 3.4vh;
-  color: var(--pink);
-  text-shadow: 0 0 8px var(--pink);
+  color: var(--accent2);
+  text-shadow: 0 0 8px var(--accent2);
 }
 .cell {
   display: grid;
   place-items: center;
   font-size: 2.6vh;
   font-weight: 700;
-  color: #3a3550;
+  color: rgb(255 255 255 / 0.22);
   border-radius: 0.6vh;
 }
 .cell.on {
   color: #fff;
-  background: rgb(47 243 255 / 0.12);
-  text-shadow: 0 0 6px var(--cyan), 0 0 14px var(--cyan);
-  box-shadow: inset 0 0 0 1px rgb(47 243 255 / 0.5);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  text-shadow: 0 0 6px var(--accent), 0 0 14px var(--accent);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 .cell.latest {
   color: #111;
-  background: var(--yellow);
+  background: var(--hi);
   text-shadow: none;
-  box-shadow: 0 0 14px var(--yellow), 0 0 30px var(--pink);
+  box-shadow: 0 0 14px var(--hi), 0 0 30px var(--accent2);
   animation: blink 0.5s steps(2) 6;
 }
 
 /* ---- カットイン・バナー・フラッシュ ---- */
 /* ---- カットイン ---- */
 .cutin {
-  --c1: #ff2f50;
-  --c2: #ff2fb4;
+  --c1: var(--accent2);
+  --c2: var(--accent3);
   --glow: #ffe53f;
   position: absolute;
   inset: 0;
@@ -326,7 +413,7 @@ body {
 }
 .cutin.tone-gold { --c1: #ffb400; --c2: #ff5a00; --glow: #fff3a0; }
 .cutin.tone-rainbow,
-.cutin.tone-jackpot { --c1: #ff2fb4; --c2: #2ff3ff; --glow: #fff; }
+.cutin.tone-jackpot { --c1: var(--accent2); --c2: var(--accent); --glow: #fff; }
 @keyframes cutin-dim {
   0% { background: rgb(255 255 255 / 0.9); }
   10% { background: rgb(0 0 0 / 0.6); }
@@ -468,8 +555,8 @@ body {
   text-align: center;
   font-family: var(--font-dela), sans-serif;
   font-size: 13vh;
-  color: var(--yellow);
-  text-shadow: 0 0 10px #fff, 0 0 30px var(--yellow), 0 0 70px var(--pink), 6px 6px 0 #000;
+  color: var(--hi);
+  text-shadow: 0 0 10px #fff, 0 0 30px var(--hi), 0 0 70px var(--accent2), 6px 6px 0 #000;
   pointer-events: none;
   z-index: 6;
   animation: banner 0.5s ease-out;
