@@ -21,12 +21,12 @@ const LETTERS = ["B", "I", "N", "G", "O"] as const;
 
 // ランクが熱いほど各段階をゆっくり見せる
 const PACE: Record<Rank, number> = {
-  white: 1,
-  blue: 1.1,
+  white: 0.55,
+  blue: 0.95,
   green: 1.25,
   red: 1.45,
-  gold: 1.6,
-  rainbow: 1.8,
+  gold: 1.4,
+  rainbow: 1.5,
 };
 // 一の位の減速カーブ（大きいほど最後がねっとり遅い）
 const POWER: Record<Rank, number> = {
@@ -215,14 +215,23 @@ export default function BingoStage() {
     const at = (back: number) => (C.target - back + C.len * 4) % C.len;
     if (slips === 0) return C.stop(opts);
     await C.stop(opts, at(slips));
+    // 1コマの滑りは熱さに関係なく一定のテンポ（長さは滑るコマ数で出す）
     for (let k = slips - 1; k >= 0; k--) {
-      await wait((100 + Math.random() * 150) * pace);
-      await C.step((260 + Math.random() * 80) * pace, at(k));
+      await wait((100 + Math.random() * 150) * Math.min(1, pace));
+      await C.step((260 + Math.random() * 80) * Math.min(1, pace), at(k));
     }
   };
 
-  const runReel = async (i: number, plan: RevealPlan, rank: Rank, telopText: string | null) => {
-    const pace = PACE[rank];
+  // quick: 後告知で追加される2本目・3本目。結果は確定済みなので短い手順で止める
+  const runReel = async (
+    i: number,
+    plan: RevealPlan,
+    rank: Rank,
+    telopText: string | null,
+    quick = false,
+  ) => {
+    const pace = quick ? 0.8 : PACE[rank];
+    if (quick) plan = { ...plan, respin: false, slips: { letter: 0, tens: 0, ones: Math.min(1, plan.slips.ones) } };
     const L = col(i, "letter");
     const T = col(i, "tens");
     const O = col(i, "ones");
@@ -246,7 +255,7 @@ export default function BingoStage() {
     }
     await wait(300 * pace);
     // 3. 一の位（減速 → 再始動 → 滑り）
-    const slow = { minCells: 3 + plan.slowSteps.length, power: POWER[rank] };
+    const slow = quick ? { minCells: 4, power: 3 } : { minCells: 3 + plan.slowSteps.length, power: POWER[rank] };
     if (plan.respin) {
       const before = (O.target - 1 + O.len) % O.len;
       await O.stop(slow, before);
@@ -316,7 +325,7 @@ export default function BingoStage() {
         ]);
         await nextFrame();
         await Promise.all(
-          plan.reels.slice(1).map((p, i) => runReel(i + 1, p, rank, null)),
+          plan.reels.slice(1).map((p, i) => runReel(i + 1, p, rank, null, true)),
         );
       }
     }

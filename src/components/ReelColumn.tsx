@@ -147,6 +147,11 @@ export default function ReelColumn({ symbols, initial, className, onCell, ref }:
       settlePending();
       const m = motion.current;
       const speed = m.kind === "spin" ? m.speed : DEFAULT_SPEED;
+      // 高速回転中（ブラーで見えない）なら位置をずらし、減速距離を常に minCells にそろえる
+      if (m.kind === "spin" && m.speed > 12) {
+        const ideal = Math.ceil(pos.current + minCells);
+        pos.current += forwardTarget(target, minCells) - ideal;
+      }
       const from = pos.current;
       const to = forwardTarget(target, minCells);
       // 初速が回転速度と一致するよう時間を決める（ease-out の初速 = power × 距離 / 時間）

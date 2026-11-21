@@ -45,7 +45,7 @@ const SLOW_RANGE: Record<Rank, [number, number]> = {
 };
 // 一の位の滑りコマ数の出やすさ [0, 1, 2, 3]
 const ONES_SLIP: Record<Rank, number[]> = {
-  white: [0.45, 0.35, 0.2, 0],
+  white: [0.45, 0.47, 0.08, 0],
   blue: [0.35, 0.4, 0.25, 0],
   green: [0.25, 0.35, 0.3, 0.1],
   red: [0.1, 0.3, 0.4, 0.2],
@@ -53,7 +53,7 @@ const ONES_SLIP: Record<Rank, number[]> = {
   rainbow: [0.05, 0.25, 0.4, 0.3],
 };
 const TENS_SLIP: Record<Rank, number> = {
-  white: 0.2, blue: 0.25, green: 0.3, red: 0.4, gold: 0.45, rainbow: 0.5,
+  white: 0.08, blue: 0.2, green: 0.3, red: 0.4, gold: 0.45, rainbow: 0.5,
 };
 const RESPIN_RATE: Record<Rank, number> = {
   white: 0, blue: 0.03, green: 0.08, red: 0.2, gold: 0.25, rainbow: 0.3,
@@ -100,7 +100,7 @@ export function buildRevealPlan(
   }
 
   const slips: Slips = {
-    letter: rng() < 0.15 ? 1 : 0,
+    letter: rank !== "white" && rng() < 0.15 ? 1 : 0,
     tens: rng() < TENS_SLIP[rank] ? 1 : 0,
     ones: pickIndex(ONES_SLIP[rank], rng),
   };
